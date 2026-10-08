@@ -56,6 +56,18 @@ describe Mailgun::Base do
 
     describe "Mailgun.submit" do
       let(:client_double) { double(Mailgun::Client) }
+      let(:transport_error) { Class.new(StandardError) }
+      let(:api_error) do
+        Class.new(StandardError) do
+          def http_code
+            400
+          end
+
+          def http_body
+            '{"message":"nope"}'
+          end
+        end
+      end
 
       it "should send method and arguments to Mailgun::Client" do
         expect(Mailgun::Client).to receive(:new)
@@ -68,29 +80,28 @@ describe Mailgun::Base do
         Mailgun.submit :test_method, '/', :arg1=>"val1"
       end
 
-      it "re-raises an error that carries no HTTP response" do
-        timeout = Class.new(StandardError)
-
-        expect(Mailgun::Client).to receive(:new).with('/').and_return(client_double)
-        expect(client_double).to receive(:test_method).and_raise(timeout)
+      it "should re-raise an error that carries no HTTP response" do
+        expect(Mailgun::Client).to receive(:new)
+          .with('/')
+          .and_return(client_double)
+        expect(client_double).to receive(:test_method)
+          .and_raise(transport_error)
 
         expect do
           Mailgun.submit :test_method, '/'
-        end.to raise_error(timeout)
+        end.to raise_error transport_error
       end
 
-      it "still reports a Mailgun error when the response carries one" do
-        api_error = Class.new(StandardError) do
-          def http_code; 400; end
-          def http_body; '{"message":"nope"}'; end
-        end
-
-        expect(Mailgun::Client).to receive(:new).with('/').and_return(client_double)
-        expect(client_double).to receive(:test_method).and_raise(api_error)
+      it "should report the Mailgun error when the response carries one" do
+        expect(Mailgun::Client).to receive(:new)
+          .with('/')
+          .and_return(client_double)
+        expect(client_double).to receive(:test_method)
+          .and_raise(api_error)
 
         expect do
           Mailgun.submit :test_method, '/'
-        end.to raise_error { |error| expect(error.message).to include('nope') }
+        end.to raise_error { |error| expect(error.message).to include 'nope' }
       end
     end
   end
