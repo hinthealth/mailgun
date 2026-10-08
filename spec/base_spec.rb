@@ -67,6 +67,31 @@ describe Mailgun::Base do
 
         Mailgun.submit :test_method, '/', :arg1=>"val1"
       end
+
+      it "re-raises an error that carries no HTTP response" do
+        timeout = Class.new(StandardError)
+
+        expect(Mailgun::Client).to receive(:new).with('/').and_return(client_double)
+        expect(client_double).to receive(:test_method).and_raise(timeout)
+
+        expect do
+          Mailgun.submit :test_method, '/'
+        end.to raise_error(timeout)
+      end
+
+      it "still reports a Mailgun error when the response carries one" do
+        api_error = Class.new(StandardError) do
+          def http_code; 400; end
+          def http_body; '{"message":"nope"}'; end
+        end
+
+        expect(Mailgun::Client).to receive(:new).with('/').and_return(client_double)
+        expect(client_double).to receive(:test_method).and_raise(api_error)
+
+        expect do
+          Mailgun.submit :test_method, '/'
+        end.to raise_error { |error| expect(error.message).to include('nope') }
+      end
     end
   end
 

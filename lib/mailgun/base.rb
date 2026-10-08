@@ -96,9 +96,13 @@ module Mailgun
     begin
       JSON.parse(Client.new(url).send(method, parameters))
     rescue => e
+      # A timeout or a reset carries no HTTP response, so there is no Mailgun
+      # error to report: it is the caller's to see and to retry.
+      raise unless e.respond_to?(:http_code) || e.respond_to?(:http_body)
+
       error_code = e.http_code if e.respond_to?(:http_code)
       error_message = begin
-        JSON(e.http_body)["message"]
+        JSON(e.http_body)["message"] if e.respond_to?(:http_body)
       rescue JSON::ParserError
         ''
       end
